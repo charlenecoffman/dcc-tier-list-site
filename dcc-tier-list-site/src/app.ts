@@ -537,10 +537,6 @@ function renderDetails(): void {
   summary.className = "details-summary";
   summary.textContent = character.summary || "No summary is available from the wiki page.";
 
-  const meta = document.createElement("p");
-  meta.className = "details-meta";
-  meta.textContent = `Page ID ${character.id}`;
-
   const link = document.createElement("a");
   link.className = "wiki-link";
   link.href = character.pageUrl;
@@ -548,7 +544,7 @@ function renderDetails(): void {
   link.rel = "noopener noreferrer";
   link.textContent = "Open wiki";
 
-  body.append(heading, summary, meta, link);
+  body.append(heading, summary, link);
 
   if (character.imageUrl) {
     const image = document.createElement("img");

@@ -546,11 +546,6 @@ body.is-pointer-dragging {
   font-size: 14px;
 }
 
-.details-meta {
-  color: var(--muted);
-  font-size: 12px;
-}
-
 .wiki-link {
   display: inline-flex;
   width: fit-content;
@@ -585,6 +580,24 @@ body.is-pointer-dragging {
 .is-loading .search-box input {
   pointer-events: none;
   opacity: 0.58;
+}
+
+.site-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 18px 14px 24px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  background: rgba(23, 22, 20, 0.92);
+  font-size: 13px;
+}
+
+.footer-mail-button {
+  min-height: 34px;
+  padding: 6px 10px;
+  text-decoration: none;
 }
 
 @media (max-width: 1180px) {
