@@ -537,7 +537,7 @@ select:focus-visible,
   gap: 9px;
   align-content: flex-start;
   min-height: 86px;
-  padding: 13px;
+  padding: 13px 13px 21px;
 }
 
 .tier-drop.drag-over,
@@ -1012,7 +1012,7 @@ body.is-pointer-dragging {
   .tier-drop {
     gap: 7px;
     min-height: 78px;
-    padding: 8px;
+    padding: 8px 8px 14px;
   }
 
   .character-card {

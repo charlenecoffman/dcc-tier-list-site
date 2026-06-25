@@ -1459,11 +1459,11 @@ function drawTierImage(
 
   context.fillStyle = "#f4efe5";
   context.font = "800 42px Segoe UI, Arial, sans-serif";
-  context.fillText("Dungeon Crawler Carl Tier List", padding, padding + 42);
+  context.fillText("Dungeon Crawler Carl: Character Tier Rankings", padding, padding + 42);
 
   context.fillStyle = "#bfb4a4";
   context.font = "24px Segoe UI, Arial, sans-serif";
-  context.fillText(`${rankedCharacterCount()} ranked of ${characters.length} live wiki characters`, padding, padding + 76);
+  context.fillText(`${rankedCharacterCount()} / ${characters.length} characters ranked`, padding, padding + 76);
 
   let y = padding + headerHeight;
 
