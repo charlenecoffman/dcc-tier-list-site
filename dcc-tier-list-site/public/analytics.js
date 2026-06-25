@@ -1,5 +1,5 @@
 (() => {
-  const measurementId = "__GA_MEASUREMENT_ID__";
+  const measurementId = window.dccSiteConfig?.gaMeasurementId ?? "";
 
   if (!/^G-[A-Z0-9]+$/i.test(measurementId)) {
     return;

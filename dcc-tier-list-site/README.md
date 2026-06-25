@@ -31,10 +31,6 @@ Optional repository secret:
 
 - `CLOUDFRONT_DISTRIBUTION_ID`
 
-Optional repository variable or secret:
-
-- `GA_MEASUREMENT_ID`
-
 ## Sharing And Persistence
 
 Local progress is saved in `localStorage`, which fits the "remember this browser" requirement better than cookies because the tier data can get too large for cookie limits.
