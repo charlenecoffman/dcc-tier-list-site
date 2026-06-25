@@ -210,6 +210,7 @@ async function initialize(): Promise<void> {
       localStateBeforeSharedTier = localState;
       state = reconcileState(sharedState);
       viewingSharedTier = true;
+      renderSharedTierActions();
       shareNotice.hidden = false;
       setStatus(`Viewing shared tier with ${characters.length} live characters.`);
     } else {
@@ -350,15 +351,19 @@ function bindEvents(): void {
   });
 
   restoreLocalButton.addEventListener("click", () => {
+    const hasLocalTier = hasRankedCharacters(localStateBeforeSharedTier);
+
     viewingSharedTier = false;
     shareNotice.hidden = true;
     hideShareLink();
     clearHash();
-    state = reconcileState(localStateBeforeSharedTier ?? createEmptyState());
+    state = reconcileState(hasLocalTier && localStateBeforeSharedTier
+      ? localStateBeforeSharedTier
+      : createEmptyState());
     selectedId = firstAvailableCharacterId();
     pendingPlacementId = null;
     render();
-    setStatus("Local tier restored.");
+    setStatus(hasLocalTier ? "Local tier restored." : "Ready to make your own tier.");
   });
 
   copyShareLinkButton.addEventListener("click", () => {
@@ -1364,6 +1369,12 @@ function hideShareLink(): void {
   shareLinkPanel.hidden = true;
 }
 
+function renderSharedTierActions(): void {
+  restoreLocalButton.textContent = hasRankedCharacters(localStateBeforeSharedTier)
+    ? "Restore mine"
+    : "Make my own";
+}
+
 async function copyShareLinkFromInput(): Promise<void> {
   const shareUrl = shareLinkInput.value;
 
@@ -1780,6 +1791,10 @@ function getRankedIdSet(): Set<CharacterId> {
 
 function rankedCharacterCount(): number {
   return tierKeys.reduce((total, tier) => total + state.tiers[tier].length, 0);
+}
+
+function hasRankedCharacters(input: TierState | null): boolean {
+  return input !== null && tierKeys.some((tier) => input.tiers[tier].length > 0);
 }
 
 function firstAvailableCharacterId(): CharacterId | null {
