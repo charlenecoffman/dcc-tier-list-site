@@ -343,7 +343,7 @@ function bindEvents(): void {
   saveSharedButton.addEventListener("click", () => {
     viewingSharedTier = false;
     shareNotice.hidden = true;
-    shareLinkPanel.hidden = true;
+    hideShareLink();
     clearHash();
     saveLocalState();
     setStatus("Shared tier saved to this browser.");
@@ -352,7 +352,7 @@ function bindEvents(): void {
   restoreLocalButton.addEventListener("click", () => {
     viewingSharedTier = false;
     shareNotice.hidden = true;
-    shareLinkPanel.hidden = true;
+    hideShareLink();
     clearHash();
     state = reconcileState(localStateBeforeSharedTier ?? createEmptyState());
     selectedId = firstAvailableCharacterId();
@@ -444,7 +444,7 @@ function resetTierList(): void {
   setCharacterPickerOpen(false);
   viewingSharedTier = false;
   shareNotice.hidden = true;
-  shareLinkPanel.hidden = true;
+  hideShareLink();
   clearHash();
   saveLocalState();
   render();
@@ -1277,6 +1277,7 @@ function moveCharacter(
     clearHash();
   }
 
+  hideShareLink();
   saveLocalState();
   render();
 }
@@ -1356,6 +1357,11 @@ function showShareLink(shareUrl: string): void {
   shareLinkInput.value = shareUrl;
   shareLinkPanel.hidden = false;
   shareLinkInput.select();
+}
+
+function hideShareLink(): void {
+  shareLinkInput.value = "";
+  shareLinkPanel.hidden = true;
 }
 
 async function copyShareLinkFromInput(): Promise<void> {
