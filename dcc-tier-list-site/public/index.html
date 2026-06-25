@@ -36,13 +36,16 @@
   </div>
 
   <main class="app-shell">
-    <section class="pool-panel" aria-label="Unranked characters">
+    <section id="poolPanel" class="pool-panel" aria-label="Unranked characters">
       <div class="panel-heading">
         <div>
           <h2>Unranked</h2>
           <p id="poolCount" class="meta-text">0 characters</p>
         </div>
-        <span id="rankedCount" class="ranked-pill">0 / 0</span>
+        <div class="panel-heading-actions">
+          <span id="rankedCount" class="ranked-pill">0 / 0</span>
+          <button id="closePickerButton" class="button button-small picker-close-button" type="button">Close</button>
+        </div>
       </div>
 
       <label class="search-box">
@@ -61,6 +64,15 @@
     </section>
 
     <section class="board-panel" aria-label="Tier board">
+      <div class="mobile-board-actions">
+        <button id="openPickerButton" class="button button-primary mobile-rank-button" type="button">Rank Character +</button>
+      </div>
+
+      <div id="placementBar" class="placement-bar" hidden>
+        <span>Placing <strong id="placementName"></strong></span>
+        <button id="cancelPlacementButton" class="button button-small" type="button">Cancel</button>
+      </div>
+
       <div id="shareNotice" class="share-notice" hidden>
         <span>Shared tier loaded.</span>
         <div class="notice-actions">
@@ -84,6 +96,8 @@
       </div>
     </aside>
   </main>
+
+  <div id="pickerBackdrop" class="picker-backdrop" hidden></div>
 
   <footer class="site-footer">
     <span>&copy; 2026 Charlene Coffman</span>

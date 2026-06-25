@@ -136,11 +136,18 @@ const tierColors: Record<TierKey, string> = {
 const statusText = requireElement<HTMLElement>("statusText");
 const poolCount = requireElement<HTMLElement>("poolCount");
 const rankedCount = requireElement<HTMLElement>("rankedCount");
+const poolPanel = requireElement<HTMLElement>("poolPanel");
 const poolZone = requireElement<HTMLElement>("poolZone");
 const tierBoard = requireElement<HTMLElement>("tierBoard");
 const detailsContent = requireElement<HTMLElement>("detailsContent");
 const searchInput = requireElement<HTMLInputElement>("searchInput");
 const categorySelect = requireElement<HTMLSelectElement>("categorySelect");
+const openPickerButton = requireElement<HTMLButtonElement>("openPickerButton");
+const closePickerButton = requireElement<HTMLButtonElement>("closePickerButton");
+const pickerBackdrop = requireElement<HTMLElement>("pickerBackdrop");
+const placementBar = requireElement<HTMLElement>("placementBar");
+const placementName = requireElement<HTMLElement>("placementName");
+const cancelPlacementButton = requireElement<HTMLButtonElement>("cancelPlacementButton");
 const refreshButton = requireElement<HTMLButtonElement>("refreshButton");
 const shareButton = requireElement<HTMLButtonElement>("shareButton");
 const downloadButton = requireElement<HTMLButtonElement>("downloadButton");
@@ -152,6 +159,7 @@ const shareLinkPanel = requireElement<HTMLElement>("shareLinkPanel");
 const shareLinkInput = requireElement<HTMLInputElement>("shareLinkInput");
 const copyShareLinkButton = requireElement<HTMLButtonElement>("copyShareLinkButton");
 const cardTemplate = requireElement<HTMLTemplateElement>("characterCardTemplate");
+const mobileExperienceQuery = window.matchMedia("(max-width: 820px)");
 
 let characterMap = new Map<CharacterId, Character>();
 let characters: Character[] = [];
@@ -162,6 +170,8 @@ let activeCategoryFilter = "";
 let draggedId: CharacterId | null = null;
 let pointerDrag: PointerDrag | null = null;
 let suppressNextClickId: CharacterId | null = null;
+let pendingPlacementId: CharacterId | null = null;
+let isPickerOpen = false;
 let loadStats: LoadStats = {
   apiPages: 0,
   categoryMembers: 0,
@@ -218,6 +228,39 @@ function bindEvents(): void {
   document.addEventListener("pointerup", handlePointerUp);
   document.addEventListener("pointercancel", handlePointerCancel);
 
+  mobileExperienceQuery.addEventListener("change", syncMobileExperience);
+
+  openPickerButton.addEventListener("click", () => {
+    setCharacterPickerOpen(true);
+  });
+
+  closePickerButton.addEventListener("click", () => {
+    setCharacterPickerOpen(false);
+  });
+
+  pickerBackdrop.addEventListener("click", () => {
+    setCharacterPickerOpen(false);
+  });
+
+  cancelPlacementButton.addEventListener("click", () => {
+    clearPendingPlacement();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") {
+      return;
+    }
+
+    if (isPickerOpen) {
+      setCharacterPickerOpen(false);
+      return;
+    }
+
+    if (pendingPlacementId) {
+      clearPendingPlacement();
+    }
+  });
+
   searchInput.addEventListener("input", () => {
     render();
   });
@@ -246,6 +289,8 @@ function bindEvents(): void {
 
     state = createEmptyState();
     selectedId = firstAvailableCharacterId();
+    pendingPlacementId = null;
+    setCharacterPickerOpen(false);
     viewingSharedTier = false;
     shareNotice.hidden = true;
     shareLinkPanel.hidden = true;
@@ -271,6 +316,7 @@ function bindEvents(): void {
     clearHash();
     state = reconcileState(localStateBeforeSharedTier ?? createEmptyState());
     selectedId = firstAvailableCharacterId();
+    pendingPlacementId = null;
     render();
     setStatus("Local tier restored.");
   });
@@ -278,6 +324,8 @@ function bindEvents(): void {
   copyShareLinkButton.addEventListener("click", () => {
     void copyShareLinkFromInput();
   });
+
+  syncMobileExperience();
 }
 
 async function refreshCharacters(): Promise<void> {
@@ -470,11 +518,16 @@ async function fetchJson<T extends ApiResponseBase>(parameters: Record<string, s
 }
 
 function render(): void {
+  if (pendingPlacementId && !characterMap.has(pendingPlacementId)) {
+    pendingPlacementId = null;
+  }
+
   renderTierBoard();
   renderCategorySelect();
   renderPool();
   renderCounts();
   renderDetails();
+  renderMobileControls();
 }
 
 function renderEmptyBoard(): void {
@@ -492,6 +545,10 @@ function renderEmptyBoard(): void {
       dropZone.className = "drop-zone tier-drop";
       dropZone.dataset.zone = tier;
 
+      row.addEventListener("click", (event) => {
+        handleTierRowPlacement(event, tier);
+      });
+
       row.append(label, dropZone);
       return row;
     })
@@ -504,6 +561,9 @@ function renderTierBoard(): void {
   for (const tier of tierKeys) {
     const row = document.createElement("section");
     row.className = "tier-row";
+    row.addEventListener("click", (event) => {
+      handleTierRowPlacement(event, tier);
+    });
 
     const label = document.createElement("div");
     label.className = "tier-label";
@@ -706,6 +766,10 @@ function createCharacterCard(character: Character): HTMLElement {
       return;
     }
 
+    if (isMobileExperience() && getCardZone(card) === "pool") {
+      return;
+    }
+
     startPointerDrag(event, character.id, card);
   });
 
@@ -713,6 +777,16 @@ function createCharacterCard(character: Character): HTMLElement {
     if (suppressNextClickId === character.id) {
       event.preventDefault();
       suppressNextClickId = null;
+      return;
+    }
+
+    if (isMobileExperience() && getCardZone(card) === "pool") {
+      event.preventDefault();
+      startPendingPlacement(character.id);
+      return;
+    }
+
+    if (isMobileExperience() && pendingPlacementId) {
       return;
     }
 
@@ -770,6 +844,87 @@ function attachDropZone(zone: HTMLElement): void {
 
     moveCharacter(id, zoneKey, targetId, insertAfter);
   });
+}
+
+function handleTierRowPlacement(event: MouseEvent, tier: TierKey): void {
+  if (!pendingPlacementId || !isMobileExperience()) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const targetCard = getClosestCard(event.target);
+  const targetId = targetCard?.dataset.id ?? null;
+  const insertAfter = targetCard ? shouldInsertAfterPoint(event.clientX, event.clientY, targetCard) : false;
+  const id = pendingPlacementId;
+  pendingPlacementId = null;
+
+  moveCharacter(id, tier, targetId, insertAfter);
+}
+
+function startPendingPlacement(id: CharacterId): void {
+  const character = characterMap.get(id);
+
+  if (!character) {
+    return;
+  }
+
+  pendingPlacementId = id;
+  selectedId = id;
+  setCharacterPickerOpen(false);
+  renderDetails();
+  renderMobileControls();
+  setStatus(`${character.name} ready to place.`);
+}
+
+function clearPendingPlacement(): void {
+  pendingPlacementId = null;
+  renderMobileControls();
+  setStatus("Placement canceled.");
+}
+
+function setCharacterPickerOpen(open: boolean): void {
+  isPickerOpen = open && isMobileExperience();
+  renderMobileControls();
+
+  if (isPickerOpen) {
+    window.setTimeout(() => {
+      searchInput.focus();
+    }, 0);
+  }
+}
+
+function syncMobileExperience(): void {
+  if (!isMobileExperience()) {
+    isPickerOpen = false;
+    pendingPlacementId = null;
+  }
+
+  renderMobileControls();
+}
+
+function renderMobileControls(): void {
+  const isMobile = isMobileExperience();
+  const placementCharacter = pendingPlacementId ? characterMap.get(pendingPlacementId) : undefined;
+  const hasUnrankedCharacters = getUnrankedCharacters().length > 0;
+
+  document.body.classList.toggle("is-mobile-experience", isMobile);
+  document.body.classList.toggle("is-picker-open", isMobile && isPickerOpen);
+  document.body.classList.toggle("is-placement-active", isMobile && Boolean(placementCharacter));
+
+  openPickerButton.disabled = !hasUnrankedCharacters;
+  pickerBackdrop.hidden = !(isMobile && isPickerOpen);
+  placementBar.hidden = !(isMobile && placementCharacter);
+  placementName.textContent = placementCharacter?.name ?? "";
+
+  if (isMobile && !isPickerOpen) {
+    poolPanel.setAttribute("aria-hidden", "true");
+    poolPanel.setAttribute("inert", "");
+  } else {
+    poolPanel.removeAttribute("aria-hidden");
+    poolPanel.removeAttribute("inert");
+  }
 }
 
 function startPointerDrag(event: PointerEvent, id: CharacterId, card: HTMLElement): void {
@@ -940,6 +1095,7 @@ function moveCharacter(
   next.updatedAt = new Date().toISOString();
   state = next;
   selectedId = id;
+  pendingPlacementId = pendingPlacementId === id ? null : pendingPlacementId;
 
   if (viewingSharedTier) {
     viewingSharedTier = false;
@@ -1447,6 +1603,15 @@ function shouldInsertAfterPoint(clientX: number, clientY: number, target: HTMLEl
 
 function getClosestCard(target: EventTarget | null): HTMLElement | null {
   return target instanceof Element ? target.closest<HTMLElement>(".character-card") : null;
+}
+
+function getCardZone(card: HTMLElement): ZoneKey | null {
+  const zone = card.closest<HTMLElement>(".drop-zone");
+  return (zone?.dataset.zone as ZoneKey | undefined) ?? null;
+}
+
+function isMobileExperience(): boolean {
+  return mobileExperienceQuery.matches;
 }
 
 function shouldIgnoreTitle(title: string): boolean {
