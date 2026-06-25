@@ -142,6 +142,7 @@ const tierBoard = requireElement<HTMLElement>("tierBoard");
 const detailsContent = requireElement<HTMLElement>("detailsContent");
 const searchInput = requireElement<HTMLInputElement>("searchInput");
 const categorySelect = requireElement<HTMLSelectElement>("categorySelect");
+const selectedCategoryList = requireElement<HTMLElement>("selectedCategoryList");
 const openPickerButton = requireElement<HTMLButtonElement>("openPickerButton");
 const closePickerButton = requireElement<HTMLButtonElement>("closePickerButton");
 const pickerBackdrop = requireElement<HTMLElement>("pickerBackdrop");
@@ -172,7 +173,7 @@ let characters: Character[] = [];
 let categoryFilters: CategoryFilter[] = [];
 let state: TierState = createEmptyState();
 let selectedId: CharacterId | null = null;
-let activeCategoryFilter = "";
+let activeCategoryFilters: string[] = [];
 let draggedId: CharacterId | null = null;
 let pointerDrag: PointerDrag | null = null;
 let suppressNextClickId: CharacterId | null = null;
@@ -311,8 +312,7 @@ function bindEvents(): void {
   });
 
   categorySelect.addEventListener("change", () => {
-    activeCategoryFilter = categorySelect.value;
-    render();
+    addCategoryFilter(categorySelect.value);
   });
 
   refreshButton.addEventListener("click", () => {
@@ -366,6 +366,24 @@ function bindEvents(): void {
   });
 
   syncMobileExperience();
+}
+
+function addCategoryFilter(category: string): void {
+  const nextCategory = category.trim();
+  categorySelect.value = "";
+
+  if (!nextCategory || activeCategoryFilters.includes(nextCategory)) {
+    return;
+  }
+
+  activeCategoryFilters = [...activeCategoryFilters, nextCategory];
+  render();
+}
+
+function removeCategoryFilter(category: string): void {
+  activeCategoryFilters = activeCategoryFilters.filter((selectedCategory) => selectedCategory !== category);
+  render();
+  categorySelect.focus();
 }
 
 function openResetDialog(): void {
@@ -445,9 +463,9 @@ async function refreshCharacters(): Promise<void> {
     characterMap = new Map(characters.map((character) => [character.id, character]));
     loadStats = loaded.stats;
     state = reconcileState(existingState);
-    activeCategoryFilter = categoryFilters.some((filter) => filter.name === activeCategoryFilter)
-      ? activeCategoryFilter
-      : "";
+    activeCategoryFilters = activeCategoryFilters.filter((category) =>
+      categoryFilters.some((filter) => filter.name === category)
+    );
 
     if (!characterMap.has(selectedId ?? "")) {
       selectedId = firstAvailableCharacterId();
@@ -710,6 +728,7 @@ function renderPool(): void {
 function renderCategorySelect(): void {
   const unrankedCharacters = getUnrankedCharacters();
   const unrankedCategoryCounts = countCategories(unrankedCharacters);
+  const selectedCategorySet = new Set(activeCategoryFilters);
   const directGroup = document.createElement("optgroup");
   const otherGroup = document.createElement("optgroup");
   const allOption = document.createElement("option");
@@ -717,22 +736,20 @@ function renderCategorySelect(): void {
   directGroup.label = "Character categories";
   otherGroup.label = "Other wiki tags";
   allOption.value = "";
-  allOption.textContent = `All categories (${unrankedCharacters.length})`;
+  allOption.textContent = activeCategoryFilters.length > 0
+    ? "Add another category..."
+    : `All categories (${unrankedCharacters.length})`;
 
   for (const filter of categoryFilters) {
     const count = unrankedCategoryCounts.get(filter.name) ?? 0;
 
-    if (count === 0 && activeCategoryFilter !== filter.name) {
+    if (selectedCategorySet.has(filter.name) || count === 0) {
       continue;
     }
 
     const option = document.createElement("option");
     option.value = filter.name;
     option.textContent = `${filter.name} (${count})`;
-
-    if (count === 0) {
-      option.disabled = true;
-    }
 
     if (filter.isDirectCharacterCategory) {
       directGroup.append(option);
@@ -752,15 +769,50 @@ function renderCategorySelect(): void {
   }
 
   categorySelect.replaceChildren(...children);
-  categorySelect.value = activeCategoryFilter;
+  categorySelect.value = "";
   categorySelect.disabled = categoryFilters.length === 0;
+  renderSelectedCategoryFilters();
+}
+
+function renderSelectedCategoryFilters(): void {
+  selectedCategoryList.replaceChildren();
+
+  if (activeCategoryFilters.length === 0) {
+    selectedCategoryList.hidden = true;
+    return;
+  }
+
+  selectedCategoryList.hidden = false;
+
+  const fragment = document.createDocumentFragment();
+
+  for (const category of activeCategoryFilters) {
+    const chip = document.createElement("span");
+    const label = document.createElement("span");
+    const removeButton = document.createElement("button");
+
+    chip.className = "selected-category-chip";
+    label.textContent = category;
+    removeButton.className = "category-chip-remove";
+    removeButton.type = "button";
+    removeButton.textContent = "x";
+    removeButton.ariaLabel = `Remove ${category} category filter`;
+    removeButton.addEventListener("click", () => {
+      removeCategoryFilter(category);
+    });
+
+    chip.append(label, removeButton);
+    fragment.append(chip);
+  }
+
+  selectedCategoryList.replaceChildren(fragment);
 }
 
 function renderCounts(): void {
   const rankedTotal = tierKeys.reduce((total, tier) => total + state.tiers[tier].length, 0);
   const unrankedTotal = Math.max(0, characters.length - rankedTotal);
   const visibleTotal = getVisiblePoolCharacters().length;
-  const isFiltered = searchInput.value.trim().length > 0 || activeCategoryFilter.length > 0;
+  const isFiltered = searchInput.value.trim().length > 0 || activeCategoryFilters.length > 0;
 
   poolCount.textContent = isFiltered
     ? `${visibleTotal} shown / ${unrankedTotal} unranked`
@@ -1661,14 +1713,34 @@ function clearHash(): void {
 
 function getUnrankedCharacters(): Character[] {
   const rankedIds = getRankedIdSet();
-  return characters.filter((character) => !rankedIds.has(character.id));
+  return getDistinctCharacters(characters).filter((character) => !rankedIds.has(character.id));
+}
+
+function getDistinctCharacters(items: Character[]): Character[] {
+  const seen = new Set<CharacterId>();
+  const distinct: Character[] = [];
+
+  for (const character of items) {
+    if (seen.has(character.id)) {
+      continue;
+    }
+
+    seen.add(character.id);
+    distinct.push(character);
+  }
+
+  return distinct;
 }
 
 function getVisiblePoolCharacters(): Character[] {
   const searchTerm = searchInput.value.trim().toLocaleLowerCase();
+  const selectedCategorySet = new Set(activeCategoryFilters);
 
   return getUnrankedCharacters().filter((character) => {
-    if (activeCategoryFilter && !character.categories.includes(activeCategoryFilter)) {
+    if (
+      selectedCategorySet.size > 0 &&
+      !character.categories.some((category) => selectedCategorySet.has(category))
+    ) {
       return false;
     }
 

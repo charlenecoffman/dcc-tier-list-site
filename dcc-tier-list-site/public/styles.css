@@ -209,6 +209,7 @@ h3 {
 .character-card:focus-visible,
 input:focus-visible,
 select:focus-visible,
+.category-chip-remove:focus-visible,
 .wiki-link:focus-visible {
   outline: 2px solid var(--teal);
   outline-offset: 2px;
@@ -383,6 +384,60 @@ select:focus-visible,
 .category-filter select:disabled {
   cursor: wait;
   opacity: 0.58;
+}
+
+.selected-category-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.selected-category-list[hidden] {
+  display: none;
+}
+
+.selected-category-chip {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 5px 4px 9px;
+  border: 1px solid rgba(215, 173, 82, 0.55);
+  border-radius: 999px;
+  color: #fff8df;
+  background: rgba(215, 173, 82, 0.12);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.selected-category-chip span {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-chip-remove {
+  display: grid;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(244, 239, 229, 0.2);
+  border-radius: 999px;
+  color: var(--text);
+  background: rgba(17, 16, 14, 0.64);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 820;
+  line-height: 1;
+}
+
+.category-chip-remove:hover {
+  border-color: rgba(215, 173, 82, 0.86);
+  background: rgba(57, 50, 40, 0.92);
 }
 
 .drop-zone {
@@ -665,7 +720,8 @@ body.is-pointer-dragging {
 
 .is-loading .toolbar .button,
 .is-loading .search-box input,
-.is-loading .category-filter select {
+.is-loading .category-filter select,
+.is-loading .category-chip-remove {
   pointer-events: none;
   opacity: 0.58;
 }

@@ -53,12 +53,13 @@
         <input id="searchInput" type="search" autocomplete="off" placeholder="Find a character">
       </label>
 
-      <label class="category-filter">
-        <span class="category-filter-label">Category</span>
+      <div class="category-filter">
+        <label class="category-filter-label" for="categorySelect">Category</label>
+        <div id="selectedCategoryList" class="selected-category-list" aria-label="Selected category filters" hidden></div>
         <select id="categorySelect" disabled>
           <option value="">All categories</option>
         </select>
-      </label>
+      </div>
 
       <div id="poolZone" class="drop-zone pool-grid" data-zone="pool" aria-label="Unranked character pool"></div>
     </section>
