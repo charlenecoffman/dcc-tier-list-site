@@ -781,6 +781,10 @@ body.is-pointer-dragging {
     padding-bottom: 14px;
   }
 
+  .share-link-panel {
+    order: -2;
+  }
+
   .mobile-board-actions {
     position: sticky;
     top: 0;
