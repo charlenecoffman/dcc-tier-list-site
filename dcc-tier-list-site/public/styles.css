@@ -208,6 +208,7 @@ h3 {
 .button:focus-visible,
 .character-card:focus-visible,
 input:focus-visible,
+select:focus-visible,
 .wiki-link:focus-visible {
   outline: 2px solid var(--teal);
   outline-offset: 2px;
@@ -311,6 +312,35 @@ input:focus-visible,
 
 .search-box input::placeholder {
   color: #867b6d;
+}
+
+.category-filter {
+  display: grid;
+  gap: 6px;
+  padding: 0 12px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.category-filter-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.category-filter select {
+  width: 100%;
+  height: 38px;
+  padding: 0 34px 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--text);
+  background: #151411;
+  cursor: pointer;
+}
+
+.category-filter select:disabled {
+  cursor: wait;
+  opacity: 0.58;
 }
 
 .drop-zone {
@@ -592,7 +622,8 @@ body.is-pointer-dragging {
 }
 
 .is-loading .toolbar .button,
-.is-loading .search-box input {
+.is-loading .search-box input,
+.is-loading .category-filter select {
   pointer-events: none;
   opacity: 0.58;
 }

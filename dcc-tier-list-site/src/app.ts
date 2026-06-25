@@ -5,6 +5,7 @@ const DETAIL_BATCH_SIZE = 20;
 const MAX_RETRIES = 4;
 
 const ignoredTitlePrefixes = ["Category:", "Template:", "File:", "Help:"];
+const ignoredFilterCategories = new Set(["Characters", "Needs photo", "Stubs"]);
 const tierKeys = ["S", "A", "B", "C", "D", "F"] as const;
 
 type TierKey = (typeof tierKeys)[number];
@@ -26,6 +27,7 @@ type CategoryMember = {
   pageid?: number;
   ns?: number;
   title?: string;
+  type?: string;
 };
 
 type CategoryApiResponse = ApiResponseBase & {
@@ -64,6 +66,7 @@ type DetailPage = {
   thumbnail?: PageImage;
   original?: PageImage;
   revisions?: Revision[];
+  categories?: PageCategory[];
 };
 
 type DetailsApiResponse = ApiResponseBase & {
@@ -80,12 +83,23 @@ type ApiResponseBase = {
   warnings?: Record<string, unknown>;
 };
 
+type PageCategory = {
+  title?: string;
+};
+
 type Character = {
   id: CharacterId;
   name: string;
   pageUrl: string;
   summary: string;
   imageUrl: string;
+  categories: string[];
+};
+
+type CategoryFilter = {
+  name: string;
+  count: number;
+  isDirectCharacterCategory: boolean;
 };
 
 type PointerDrag = {
@@ -126,6 +140,7 @@ const poolZone = requireElement<HTMLElement>("poolZone");
 const tierBoard = requireElement<HTMLElement>("tierBoard");
 const detailsContent = requireElement<HTMLElement>("detailsContent");
 const searchInput = requireElement<HTMLInputElement>("searchInput");
+const categorySelect = requireElement<HTMLSelectElement>("categorySelect");
 const refreshButton = requireElement<HTMLButtonElement>("refreshButton");
 const shareButton = requireElement<HTMLButtonElement>("shareButton");
 const downloadButton = requireElement<HTMLButtonElement>("downloadButton");
@@ -140,8 +155,10 @@ const cardTemplate = requireElement<HTMLTemplateElement>("characterCardTemplate"
 
 let characterMap = new Map<CharacterId, Character>();
 let characters: Character[] = [];
+let categoryFilters: CategoryFilter[] = [];
 let state: TierState = createEmptyState();
 let selectedId: CharacterId | null = null;
+let activeCategoryFilter = "";
 let draggedId: CharacterId | null = null;
 let pointerDrag: PointerDrag | null = null;
 let suppressNextClickId: CharacterId | null = null;
@@ -167,6 +184,7 @@ async function initialize(): Promise<void> {
 
     const loaded = await loadCharacters();
     characters = loaded.characters;
+    categoryFilters = loaded.categoryFilters;
     characterMap = new Map(characters.map((character) => [character.id, character]));
     loadStats = loaded.stats;
 
@@ -201,6 +219,11 @@ function bindEvents(): void {
   document.addEventListener("pointercancel", handlePointerCancel);
 
   searchInput.addEventListener("input", () => {
+    render();
+  });
+
+  categorySelect.addEventListener("change", () => {
+    activeCategoryFilter = categorySelect.value;
     render();
   });
 
@@ -265,9 +288,13 @@ async function refreshCharacters(): Promise<void> {
     const existingState = cloneState(state);
     const loaded = await loadCharacters();
     characters = loaded.characters;
+    categoryFilters = loaded.categoryFilters;
     characterMap = new Map(characters.map((character) => [character.id, character]));
     loadStats = loaded.stats;
     state = reconcileState(existingState);
+    activeCategoryFilter = categoryFilters.some((filter) => filter.name === activeCategoryFilter)
+      ? activeCategoryFilter
+      : "";
 
     if (!characterMap.has(selectedId ?? "")) {
       selectedId = firstAvailableCharacterId();
@@ -287,8 +314,15 @@ async function refreshCharacters(): Promise<void> {
   }
 }
 
-async function loadCharacters(): Promise<{ characters: Character[]; stats: LoadStats }> {
+async function loadCharacters(): Promise<{ characters: Character[]; categoryFilters: CategoryFilter[]; stats: LoadStats }> {
   const categoryResult = await fetchCategoryMembers();
+  const directCharacterCategories = new Set(
+    categoryResult.members
+      .map((member) => member.title?.trim() ?? "")
+      .filter((title) => title.startsWith("Category:"))
+      .map(stripCategoryPrefix)
+      .filter((category) => category.length > 0)
+  );
   const uniqueTitles = Array.from(
     new Set(
       categoryResult.members
@@ -315,7 +349,8 @@ async function loadCharacters(): Promise<{ characters: Character[]; stats: LoadS
         name: page.title,
         pageUrl: page.fullurl ?? page.canonicalurl ?? wikiUrlForTitle(page.title),
         summary: extractFirstSentenceFromWikitext(getRevisionContent(page) ?? ""),
-        imageUrl: page.original?.source ?? page.thumbnail?.source ?? ""
+        imageUrl: page.original?.source ?? page.thumbnail?.source ?? "",
+        categories: getPageCategories(page)
       };
 
       detailMap.set(id, character);
@@ -326,6 +361,7 @@ async function loadCharacters(): Promise<{ characters: Character[]; stats: LoadS
 
   return {
     characters: sortedCharacters,
+    categoryFilters: getCategoryFilters(sortedCharacters, directCharacterCategories),
     stats: {
       apiPages: categoryResult.apiPages,
       categoryMembers: categoryResult.members.length,
@@ -364,11 +400,13 @@ async function fetchCategoryMembers(): Promise<{ members: CategoryMember[]; apiP
 async function fetchDetailsBatch(titles: string[]): Promise<DetailPage[]> {
   const response = await fetchJson<DetailsApiResponse>({
     action: "query",
-    prop: "revisions|pageimages|info",
+    prop: "revisions|pageimages|info|categories",
     inprop: "url",
     rvprop: "content",
     rvslots: "main",
     rvsection: "0",
+    cllimit: "max",
+    clshow: "!hidden",
     piprop: "thumbnail|original",
     pithumbsize: "260",
     redirects: "1",
@@ -433,6 +471,7 @@ async function fetchJson<T extends ApiResponseBase>(parameters: Record<string, s
 
 function render(): void {
   renderTierBoard();
+  renderCategorySelect();
   renderPool();
   renderCounts();
   renderDetails();
@@ -492,15 +531,7 @@ function renderTierBoard(): void {
 }
 
 function renderPool(): void {
-  const searchTerm = searchInput.value.trim().toLocaleLowerCase();
-  const rankedIds = getRankedIdSet();
-  const poolCharacters = characters.filter((character) => {
-    if (rankedIds.has(character.id)) {
-      return false;
-    }
-
-    return searchTerm.length === 0 || character.name.toLocaleLowerCase().includes(searchTerm);
-  });
+  const poolCharacters = getVisiblePoolCharacters();
 
   const fragment = document.createDocumentFragment();
 
@@ -511,11 +542,64 @@ function renderPool(): void {
   poolZone.replaceChildren(fragment);
 }
 
+function renderCategorySelect(): void {
+  const unrankedCharacters = getUnrankedCharacters();
+  const unrankedCategoryCounts = countCategories(unrankedCharacters);
+  const directGroup = document.createElement("optgroup");
+  const otherGroup = document.createElement("optgroup");
+  const allOption = document.createElement("option");
+
+  directGroup.label = "Character categories";
+  otherGroup.label = "Other wiki tags";
+  allOption.value = "";
+  allOption.textContent = `All categories (${unrankedCharacters.length})`;
+
+  for (const filter of categoryFilters) {
+    const count = unrankedCategoryCounts.get(filter.name) ?? 0;
+
+    if (count === 0 && activeCategoryFilter !== filter.name) {
+      continue;
+    }
+
+    const option = document.createElement("option");
+    option.value = filter.name;
+    option.textContent = `${filter.name} (${count})`;
+
+    if (count === 0) {
+      option.disabled = true;
+    }
+
+    if (filter.isDirectCharacterCategory) {
+      directGroup.append(option);
+    } else {
+      otherGroup.append(option);
+    }
+  }
+
+  const children: HTMLElement[] = [allOption];
+
+  if (directGroup.children.length > 0) {
+    children.push(directGroup);
+  }
+
+  if (otherGroup.children.length > 0) {
+    children.push(otherGroup);
+  }
+
+  categorySelect.replaceChildren(...children);
+  categorySelect.value = activeCategoryFilter;
+  categorySelect.disabled = categoryFilters.length === 0;
+}
+
 function renderCounts(): void {
   const rankedTotal = tierKeys.reduce((total, tier) => total + state.tiers[tier].length, 0);
   const unrankedTotal = Math.max(0, characters.length - rankedTotal);
+  const visibleTotal = getVisiblePoolCharacters().length;
+  const isFiltered = searchInput.value.trim().length > 0 || activeCategoryFilter.length > 0;
 
-  poolCount.textContent = `${unrankedTotal} unranked`;
+  poolCount.textContent = isFiltered
+    ? `${visibleTotal} shown / ${unrankedTotal} unranked`
+    : `${unrankedTotal} unranked`;
   rankedCount.textContent = `${rankedTotal} / ${characters.length}`;
 }
 
@@ -1293,6 +1377,35 @@ function clearHash(): void {
   history.replaceState(null, document.title, `${window.location.pathname}${window.location.search}`);
 }
 
+function getUnrankedCharacters(): Character[] {
+  const rankedIds = getRankedIdSet();
+  return characters.filter((character) => !rankedIds.has(character.id));
+}
+
+function getVisiblePoolCharacters(): Character[] {
+  const searchTerm = searchInput.value.trim().toLocaleLowerCase();
+
+  return getUnrankedCharacters().filter((character) => {
+    if (activeCategoryFilter && !character.categories.includes(activeCategoryFilter)) {
+      return false;
+    }
+
+    return searchTerm.length === 0 || character.name.toLocaleLowerCase().includes(searchTerm);
+  });
+}
+
+function countCategories(items: Character[]): Map<string, number> {
+  const counts = new Map<string, number>();
+
+  for (const character of items) {
+    for (const category of character.categories) {
+      counts.set(category, (counts.get(category) ?? 0) + 1);
+    }
+  }
+
+  return counts;
+}
+
 function getRankedIdSet(): Set<CharacterId> {
   const ranked = new Set<CharacterId>();
 
@@ -1342,6 +1455,42 @@ function shouldIgnoreTitle(title: string): boolean {
 
 function compareCharactersByName(first: Character, second: Character): number {
   return first.name.localeCompare(second.name, undefined, { sensitivity: "base" });
+}
+
+function compareCategoryNames(first: string, second: string): number {
+  return first.localeCompare(second, undefined, { sensitivity: "base" });
+}
+
+function getCategoryFilters(items: Character[], directCharacterCategories: Set<string>): CategoryFilter[] {
+  return Array.from(countCategories(items).entries())
+    .map(([name, count]) => ({
+      name,
+      count,
+      isDirectCharacterCategory: directCharacterCategories.has(name)
+    }))
+    .sort((first, second) => {
+      if (first.isDirectCharacterCategory !== second.isDirectCharacterCategory) {
+        return first.isDirectCharacterCategory ? -1 : 1;
+      }
+
+      return second.count - first.count || compareCategoryNames(first.name, second.name);
+    });
+}
+
+function getPageCategories(page: DetailPage): string[] {
+  const categories = (page.categories ?? [])
+    .map((category) => stripCategoryPrefix(category.title?.trim() ?? ""))
+    .filter(isUserFacingCategory);
+
+  return Array.from(new Set(categories)).sort(compareCategoryNames);
+}
+
+function stripCategoryPrefix(title: string): string {
+  return title.startsWith("Category:") ? title.slice("Category:".length) : "";
+}
+
+function isUserFacingCategory(category: string): boolean {
+  return category.length > 0 && !ignoredFilterCategories.has(category);
 }
 
 function getRevisionContent(page: DetailPage): string | null {
