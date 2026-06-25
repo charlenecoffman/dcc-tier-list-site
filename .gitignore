@@ -1,0 +1,5 @@
+**/bin/
+**/obj/
+dcc-tier-list-site/dist/
+dcc-tier-list-site/node_modules/
+dcc-tier-list-site/*.log

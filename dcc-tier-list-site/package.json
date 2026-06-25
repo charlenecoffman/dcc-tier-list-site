@@ -1,0 +1,14 @@
+{
+  "name": "dcc-tier-list-site",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "npm run clean && tsc -p tsconfig.json && node scripts/copy-public.mjs",
+    "serve": "npm run build && node scripts/serve.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}

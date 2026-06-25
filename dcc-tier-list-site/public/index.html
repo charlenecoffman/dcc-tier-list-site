@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dungeon Crawler Carl Tier Maker</title>
+  <meta name="description" content="Build and share a Dungeon Crawler Carl character tier list using live Fandom wiki data.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="is-loading">
+  <header class="app-header">
+    <div class="brand-block">
+      <div class="brand-mark" aria-hidden="true">DCC</div>
+      <div>
+        <h1>Dungeon Crawler Carl Tier Maker</h1>
+      </div>
+    </div>
+
+    <div class="toolbar" aria-label="Tier list actions">
+      <button id="refreshButton" class="button" type="button">Refresh</button>
+      <button id="shareButton" class="button button-primary" type="button">Share</button>
+      <button id="downloadButton" class="button" type="button">PNG</button>
+      <button id="resetButton" class="button button-danger" type="button">Reset</button>
+    </div>
+  </header>
+
+  <div id="loadingOverlay" class="loading-overlay" role="status" aria-live="polite" aria-atomic="true">
+    <div class="loading-dialog">
+      <div class="loading-spinner" aria-hidden="true"></div>
+      <div>
+        <p class="loading-title">Loading characters from the wiki</p>
+        <p id="statusText" class="loading-message">Loading live wiki data...</p>
+      </div>
+    </div>
+  </div>
+
+  <main class="app-shell">
+    <section class="pool-panel" aria-label="Unranked characters">
+      <div class="panel-heading">
+        <div>
+          <h2>Unranked</h2>
+          <p id="poolCount" class="meta-text">0 characters</p>
+        </div>
+        <span id="rankedCount" class="ranked-pill">0 / 0</span>
+      </div>
+
+      <label class="search-box">
+        <span class="sr-only">Search characters</span>
+        <input id="searchInput" type="search" autocomplete="off" placeholder="Find a character">
+      </label>
+
+      <div id="poolZone" class="drop-zone pool-grid" data-zone="pool" aria-label="Unranked character pool"></div>
+    </section>
+
+    <section class="board-panel" aria-label="Tier board">
+      <div id="shareNotice" class="share-notice" hidden>
+        <span>Shared tier loaded.</span>
+        <div class="notice-actions">
+          <button id="saveSharedButton" class="button button-small" type="button">Save here</button>
+          <button id="restoreLocalButton" class="button button-small" type="button">Restore mine</button>
+        </div>
+      </div>
+
+      <div id="shareLinkPanel" class="share-link-panel" hidden>
+        <label class="sr-only" for="shareLinkInput">Share link</label>
+        <input id="shareLinkInput" type="text" readonly>
+        <button id="copyShareLinkButton" class="button button-small" type="button">Copy</button>
+      </div>
+
+      <div id="tierBoard" class="tier-board"></div>
+    </section>
+
+    <aside class="details-panel" aria-label="Character details">
+      <div id="detailsContent" class="details-content">
+        <p class="empty-details">Select a character</p>
+      </div>
+    </aside>
+  </main>
+
+  <template id="characterCardTemplate">
+    <article class="character-card">
+      <div class="portrait-wrap">
+        <img class="portrait" alt="" loading="lazy">
+        <span class="portrait-fallback" aria-hidden="true"></span>
+      </div>
+      <span class="character-name"></span>
+    </article>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
