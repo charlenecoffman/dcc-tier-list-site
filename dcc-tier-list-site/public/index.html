@@ -99,6 +99,29 @@
 
   <div id="pickerBackdrop" class="picker-backdrop" hidden></div>
 
+  <dialog id="resetDialog" class="reset-dialog" aria-labelledby="resetDialogTitle" aria-describedby="resetDialogDescription">
+    <div class="reset-modal-card">
+      <div>
+        <p class="reset-modal-eyebrow">Confirm reset</p>
+        <h2 id="resetDialogTitle" class="reset-modal-title">Reset tier list?</h2>
+      </div>
+      <p id="resetDialogDescription" class="reset-modal-copy">
+        This clears the rankings saved in this browser and moves every character back to Unranked.
+      </p>
+      <div class="reset-modal-actions">
+        <button id="cancelResetButton" class="button" type="button" autofocus>Keep list</button>
+        <button id="confirmResetButton" class="button button-danger reset-confirm-button" type="button">Reset list</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="mobileDetailsDialog" class="mobile-details-dialog" aria-labelledby="mobileDetailsTitle">
+    <div class="mobile-details-card">
+      <button id="closeMobileDetailsButton" class="button button-small mobile-details-close" type="button">Close</button>
+      <div id="mobileDetailsContent" class="mobile-details-content"></div>
+    </div>
+  </dialog>
+
   <footer class="site-footer">
     <span>&copy; 2026 Charlene Coffman</span>
     <a class="footer-mail-link" href="mailto:coffmancharlene@gmail.com?subject=DCC%20Rankings%20Question">Questions? Email me</a>

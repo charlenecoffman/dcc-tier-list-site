@@ -152,6 +152,12 @@ const refreshButton = requireElement<HTMLButtonElement>("refreshButton");
 const shareButton = requireElement<HTMLButtonElement>("shareButton");
 const downloadButton = requireElement<HTMLButtonElement>("downloadButton");
 const resetButton = requireElement<HTMLButtonElement>("resetButton");
+const resetDialog = requireElement<HTMLDialogElement>("resetDialog");
+const cancelResetButton = requireElement<HTMLButtonElement>("cancelResetButton");
+const confirmResetButton = requireElement<HTMLButtonElement>("confirmResetButton");
+const mobileDetailsDialog = requireElement<HTMLDialogElement>("mobileDetailsDialog");
+const mobileDetailsContent = requireElement<HTMLElement>("mobileDetailsContent");
+const closeMobileDetailsButton = requireElement<HTMLButtonElement>("closeMobileDetailsButton");
 const shareNotice = requireElement<HTMLElement>("shareNotice");
 const saveSharedButton = requireElement<HTMLButtonElement>("saveSharedButton");
 const restoreLocalButton = requireElement<HTMLButtonElement>("restoreLocalButton");
@@ -179,6 +185,7 @@ let loadStats: LoadStats = {
 };
 let localStateBeforeSharedTier: TierState | null = null;
 let viewingSharedTier = false;
+let mobileDetailsReturnFocus: HTMLElement | null = null;
 
 bindEvents();
 renderEmptyBoard();
@@ -242,12 +249,50 @@ function bindEvents(): void {
     setCharacterPickerOpen(false);
   });
 
+  resetDialog.addEventListener("click", (event) => {
+    if (event.target === resetDialog) {
+      closeResetDialog();
+    }
+  });
+
+  resetDialog.addEventListener("close", () => {
+    resetButton.focus();
+  });
+
+  mobileDetailsDialog.addEventListener("click", (event) => {
+    if (event.target === mobileDetailsDialog) {
+      closeMobileDetailsDialog();
+    }
+  });
+
+  mobileDetailsDialog.addEventListener("close", () => {
+    mobileDetailsContent.replaceChildren();
+
+    if (mobileDetailsReturnFocus?.isConnected) {
+      mobileDetailsReturnFocus.focus();
+    }
+
+    mobileDetailsReturnFocus = null;
+  });
+
+  closeMobileDetailsButton.addEventListener("click", () => {
+    closeMobileDetailsDialog();
+  });
+
   cancelPlacementButton.addEventListener("click", () => {
     clearPendingPlacement();
   });
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") {
+      return;
+    }
+
+    if (resetDialog.open) {
+      return;
+    }
+
+    if (mobileDetailsDialog.open) {
       return;
     }
 
@@ -283,21 +328,16 @@ function bindEvents(): void {
   });
 
   resetButton.addEventListener("click", () => {
-    if (!window.confirm("Reset this browser's tier list?")) {
-      return;
-    }
+    openResetDialog();
+  });
 
-    state = createEmptyState();
-    selectedId = firstAvailableCharacterId();
-    pendingPlacementId = null;
-    setCharacterPickerOpen(false);
-    viewingSharedTier = false;
-    shareNotice.hidden = true;
-    shareLinkPanel.hidden = true;
-    clearHash();
-    saveLocalState();
-    render();
-    setStatus("Tier list reset.");
+  cancelResetButton.addEventListener("click", () => {
+    closeResetDialog();
+  });
+
+  confirmResetButton.addEventListener("click", () => {
+    closeResetDialog();
+    resetTierList();
   });
 
   saveSharedButton.addEventListener("click", () => {
@@ -326,6 +366,71 @@ function bindEvents(): void {
   });
 
   syncMobileExperience();
+}
+
+function openResetDialog(): void {
+  if (resetDialog.open) {
+    return;
+  }
+
+  resetDialog.showModal();
+
+  window.setTimeout(() => {
+    cancelResetButton.focus();
+  }, 0);
+}
+
+function closeResetDialog(): void {
+  if (resetDialog.open) {
+    resetDialog.close();
+  }
+}
+
+function openMobileDetailsDialog(id: CharacterId, returnFocus: HTMLElement): void {
+  if (!isMobileExperience()) {
+    selectCharacter(id);
+    return;
+  }
+
+  const character = characterMap.get(id);
+
+  if (!character) {
+    return;
+  }
+
+  selectedId = id;
+  renderDetails();
+  updateSelectedCharacterCards(id);
+  mobileDetailsReturnFocus = returnFocus;
+  mobileDetailsContent.replaceChildren(...createCharacterDetailsContent(character, "mobileDetailsTitle"));
+
+  if (!mobileDetailsDialog.open) {
+    mobileDetailsDialog.showModal();
+  }
+
+  window.setTimeout(() => {
+    closeMobileDetailsButton.focus();
+  }, 0);
+}
+
+function closeMobileDetailsDialog(): void {
+  if (mobileDetailsDialog.open) {
+    mobileDetailsDialog.close();
+  }
+}
+
+function resetTierList(): void {
+  state = createEmptyState();
+  selectedId = firstAvailableCharacterId();
+  pendingPlacementId = null;
+  setCharacterPickerOpen(false);
+  viewingSharedTier = false;
+  shareNotice.hidden = true;
+  shareLinkPanel.hidden = true;
+  clearHash();
+  saveLocalState();
+  render();
+  setStatus("Tier list reset.");
 }
 
 async function refreshCharacters(): Promise<void> {
@@ -671,11 +776,19 @@ function renderDetails(): void {
     return;
   }
 
+  detailsContent.replaceChildren(...createCharacterDetailsContent(character));
+}
+
+function createCharacterDetailsContent(character: Character, headingId?: string): HTMLElement[] {
   const body = document.createElement("div");
   body.className = "details-body";
 
   const heading = document.createElement("h3");
   heading.textContent = character.name;
+
+  if (headingId) {
+    heading.id = headingId;
+  }
 
   const summary = document.createElement("p");
   summary.className = "details-summary";
@@ -699,10 +812,11 @@ function renderDetails(): void {
     image.addEventListener("error", () => {
       image.replaceWith(createDetailsFallback(character));
     });
-    detailsContent.replaceChildren(image, body);
-  } else {
-    detailsContent.replaceChildren(createDetailsFallback(character), body);
+
+    return [image, body];
   }
+
+  return [createDetailsFallback(character), body];
 }
 
 function renderLoadError(error: unknown): void {
@@ -780,13 +894,21 @@ function createCharacterCard(character: Character): HTMLElement {
       return;
     }
 
-    if (isMobileExperience() && getCardZone(card) === "pool") {
-      event.preventDefault();
-      startPendingPlacement(character.id);
-      return;
-    }
+    if (isMobileExperience()) {
+      const zone = getCardZone(card);
 
-    if (isMobileExperience() && pendingPlacementId) {
+      if (zone === "pool") {
+        event.preventDefault();
+        startPendingPlacement(character.id);
+        return;
+      }
+
+      if (pendingPlacementId) {
+        return;
+      }
+
+      event.preventDefault();
+      openMobileDetailsDialog(character.id, card);
       return;
     }
 
@@ -1115,6 +1237,10 @@ function selectCharacter(id: CharacterId, updateCards = true): void {
     return;
   }
 
+  updateSelectedCharacterCards(id);
+}
+
+function updateSelectedCharacterCards(id: CharacterId): void {
   document.querySelectorAll(".character-card.selected").forEach((element) => {
     element.classList.remove("selected");
   });
