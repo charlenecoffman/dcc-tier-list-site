@@ -909,7 +909,11 @@ body.is-pointer-dragging {
   }
 
   body {
-    overflow: hidden;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .app-header {
@@ -941,13 +945,14 @@ body.is-pointer-dragging {
 
   .app-shell {
     grid-template-columns: 1fr;
-    overflow: hidden;
+    min-height: auto;
+    overflow: visible;
     padding: 8px;
   }
 
   .board-panel {
     order: 1;
-    overflow: auto;
+    overflow: visible;
     padding-bottom: 14px;
   }
 
@@ -1021,6 +1026,7 @@ body.is-pointer-dragging {
     width: var(--card-width);
     min-height: var(--card-height);
     padding: 8px 9px;
+    touch-action: none;
   }
 
   .pool-grid .character-card {
@@ -1028,7 +1034,6 @@ body.is-pointer-dragging {
     min-height: 44px;
     padding: 11px 12px;
     cursor: pointer;
-    touch-action: pan-y;
   }
 
   .portrait-wrap {

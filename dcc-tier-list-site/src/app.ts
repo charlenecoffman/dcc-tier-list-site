@@ -3,6 +3,11 @@ const CATEGORY_TITLE = "Category:Characters";
 const STORAGE_KEY = "dcc-tier-maker-state-v1";
 const DETAIL_BATCH_SIZE = 20;
 const MAX_RETRIES = 4;
+const MOBILE_LONG_PRESS_DELAY = 340;
+const MOBILE_LONG_PRESS_MOVE_TOLERANCE = 10;
+const MOBILE_AUTO_SCROLL_EDGE = 76;
+const MOBILE_AUTO_SCROLL_MIN_SPEED = 4;
+const MOBILE_AUTO_SCROLL_MAX_SPEED = 18;
 
 const ignoredTitlePrefixes = ["Category:", "Template:", "File:", "Help:"];
 const ignoredFilterCategories = new Set(["Characters", "Needs photo", "Stubs"]);
@@ -107,9 +112,13 @@ type PointerDrag = {
   pointerId: number;
   startX: number;
   startY: number;
+  lastX: number;
+  lastY: number;
   active: boolean;
   sourceCard: HTMLElement;
   ghost: HTMLElement | null;
+  longPressTimer: number | null;
+  usesLongPress: boolean;
 };
 
 type DropTarget = {
@@ -179,6 +188,8 @@ let pointerDrag: PointerDrag | null = null;
 let suppressNextClickId: CharacterId | null = null;
 let pendingPlacementId: CharacterId | null = null;
 let isPickerOpen = false;
+let mobileAutoScrollFrame: number | null = null;
+let mobileAutoScrollVelocity = 0;
 let loadStats: LoadStats = {
   apiPages: 0,
   categoryMembers: 0,
@@ -937,10 +948,6 @@ function createCharacterCard(character: Character): HTMLElement {
       return;
     }
 
-    if (isMobileExperience() && getCardZone(card) === "pool") {
-      return;
-    }
-
     startPointerDrag(event, character.id, card);
   });
 
@@ -952,14 +959,6 @@ function createCharacterCard(character: Character): HTMLElement {
     }
 
     if (isMobileExperience()) {
-      const zone = getCardZone(card);
-
-      if (zone === "pool") {
-        event.preventDefault();
-        startPendingPlacement(character.id);
-        return;
-      }
-
       if (pendingPlacementId) {
         return;
       }
@@ -1107,15 +1106,35 @@ function renderMobileControls(): void {
 }
 
 function startPointerDrag(event: PointerEvent, id: CharacterId, card: HTMLElement): void {
+  if (pointerDrag) {
+    cleanupPointerDrag();
+  }
+
+  const usesLongPress = isMobileExperience();
+
   pointerDrag = {
     id,
     pointerId: event.pointerId,
     startX: event.clientX,
     startY: event.clientY,
+    lastX: event.clientX,
+    lastY: event.clientY,
     active: false,
     sourceCard: card,
-    ghost: null
+    ghost: null,
+    longPressTimer: null,
+    usesLongPress
   };
+
+  const currentDrag = pointerDrag;
+
+  if (usesLongPress) {
+    currentDrag.longPressTimer = window.setTimeout(() => {
+      if (pointerDrag === currentDrag && !currentDrag.active) {
+        activatePointerDrag(currentDrag);
+      }
+    }, MOBILE_LONG_PRESS_DELAY);
+  }
 
   try {
     card.setPointerCapture(event.pointerId);
@@ -1129,22 +1148,31 @@ function handlePointerMove(event: PointerEvent): void {
     return;
   }
 
+  pointerDrag.lastX = event.clientX;
+  pointerDrag.lastY = event.clientY;
+
   const distance = Math.hypot(event.clientX - pointerDrag.startX, event.clientY - pointerDrag.startY);
+
+  if (pointerDrag.usesLongPress && !pointerDrag.active) {
+    if (distance > MOBILE_LONG_PRESS_MOVE_TOLERANCE) {
+      cleanupPointerDrag();
+    }
+
+    return;
+  }
 
   if (!pointerDrag.active && distance < 6) {
     return;
   }
 
   if (!pointerDrag.active) {
-    pointerDrag.active = true;
-    pointerDrag.ghost = createDragGhost(pointerDrag.sourceCard);
-    pointerDrag.sourceCard.classList.add("pointer-drag-source");
-    document.body.classList.add("is-pointer-dragging");
+    activatePointerDrag(pointerDrag);
   }
 
   event.preventDefault();
   updateDragGhost(pointerDrag.ghost, event.clientX, event.clientY);
   highlightDropTarget(event.clientX, event.clientY);
+  updateMobileAutoScroll(event.clientY);
 }
 
 function handlePointerUp(event: PointerEvent): void {
@@ -1178,6 +1206,37 @@ function handlePointerCancel(event: PointerEvent): void {
   }
 }
 
+function activatePointerDrag(drag: PointerDrag): void {
+  clearPointerLongPressTimer(drag);
+  drag.active = true;
+  drag.ghost = createDragGhost(drag.sourceCard);
+  drag.sourceCard.classList.add("pointer-drag-source");
+  document.body.classList.add("is-pointer-dragging");
+
+  if (drag.usesLongPress) {
+    pendingPlacementId = null;
+
+    if (getCardZone(drag.sourceCard) === "pool") {
+      setCharacterPickerOpen(false);
+    } else {
+      renderMobileControls();
+    }
+  }
+
+  updateDragGhost(drag.ghost, drag.lastX, drag.lastY);
+  highlightDropTarget(drag.lastX, drag.lastY);
+  updateMobileAutoScroll(drag.lastY);
+}
+
+function clearPointerLongPressTimer(drag: PointerDrag): void {
+  if (drag.longPressTimer === null) {
+    return;
+  }
+
+  window.clearTimeout(drag.longPressTimer);
+  drag.longPressTimer = null;
+}
+
 function createDragGhost(sourceCard: HTMLElement): HTMLElement {
   const ghost = sourceCard.cloneNode(true);
 
@@ -1199,6 +1258,64 @@ function updateDragGhost(ghost: HTMLElement | null, clientX: number, clientY: nu
   }
 
   ghost.style.transform = `translate(${clientX + 10}px, ${clientY + 10}px)`;
+}
+
+function updateMobileAutoScroll(clientY: number): void {
+  if (!pointerDrag?.active || !pointerDrag.usesLongPress || !isMobileExperience()) {
+    stopMobileAutoScroll();
+    return;
+  }
+
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  let nextVelocity = 0;
+
+  if (clientY < MOBILE_AUTO_SCROLL_EDGE) {
+    nextVelocity = -getMobileAutoScrollVelocity(clientY);
+  } else if (clientY > viewportHeight - MOBILE_AUTO_SCROLL_EDGE) {
+    nextVelocity = getMobileAutoScrollVelocity(viewportHeight - clientY);
+  }
+
+  mobileAutoScrollVelocity = nextVelocity;
+
+  if (nextVelocity === 0) {
+    stopMobileAutoScroll();
+    return;
+  }
+
+  if (mobileAutoScrollFrame === null) {
+    mobileAutoScrollFrame = window.requestAnimationFrame(runMobileAutoScroll);
+  }
+}
+
+function getMobileAutoScrollVelocity(distanceFromEdge: number): number {
+  const clampedDistance = Math.max(0, Math.min(MOBILE_AUTO_SCROLL_EDGE, distanceFromEdge));
+  const intensity = (MOBILE_AUTO_SCROLL_EDGE - clampedDistance) / MOBILE_AUTO_SCROLL_EDGE;
+  return Math.round(
+    MOBILE_AUTO_SCROLL_MIN_SPEED +
+    intensity * (MOBILE_AUTO_SCROLL_MAX_SPEED - MOBILE_AUTO_SCROLL_MIN_SPEED)
+  );
+}
+
+function runMobileAutoScroll(): void {
+  mobileAutoScrollFrame = null;
+
+  if (!pointerDrag?.active || !pointerDrag.usesLongPress || mobileAutoScrollVelocity === 0) {
+    return;
+  }
+
+  window.scrollBy(0, mobileAutoScrollVelocity);
+  updateDragGhost(pointerDrag.ghost, pointerDrag.lastX, pointerDrag.lastY);
+  highlightDropTarget(pointerDrag.lastX, pointerDrag.lastY);
+  mobileAutoScrollFrame = window.requestAnimationFrame(runMobileAutoScroll);
+}
+
+function stopMobileAutoScroll(): void {
+  mobileAutoScrollVelocity = 0;
+
+  if (mobileAutoScrollFrame !== null) {
+    window.cancelAnimationFrame(mobileAutoScrollFrame);
+    mobileAutoScrollFrame = null;
+  }
 }
 
 function highlightDropTarget(clientX: number, clientY: number): void {
@@ -1242,6 +1359,8 @@ function cleanupPointerDrag(): void {
     return;
   }
 
+  clearPointerLongPressTimer(pointerDrag);
+  stopMobileAutoScroll();
   pointerDrag.sourceCard.classList.remove("pointer-drag-source");
   pointerDrag.ghost?.remove();
   pointerDrag = null;
