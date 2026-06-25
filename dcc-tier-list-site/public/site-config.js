@@ -1,3 +1,3 @@
 window.dccSiteConfig = {
-  gaMeasurementId: "G-8MFCM727EX"
+  gaMeasurementId: "G-YM3J1JJK8T"
 };
