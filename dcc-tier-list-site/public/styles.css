@@ -210,6 +210,7 @@ h3 {
 input:focus-visible,
 select:focus-visible,
 .category-chip-remove:focus-visible,
+.footer-link:focus-visible,
 .wiki-link:focus-visible {
   outline: 2px solid var(--teal);
   outline-offset: 2px;
@@ -740,7 +741,7 @@ body.is-pointer-dragging {
   font-size: 12px;
 }
 
-.footer-mail-link {
+.footer-link {
   display: inline-flex;
   min-height: 30px;
   align-items: center;
@@ -753,7 +754,7 @@ body.is-pointer-dragging {
   text-decoration: none;
 }
 
-.footer-mail-link:hover {
+.footer-link:hover {
   border-color: rgba(215, 173, 82, 0.85);
   background: rgba(215, 173, 82, 0.14);
 }

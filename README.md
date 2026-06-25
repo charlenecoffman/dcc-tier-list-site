@@ -36,6 +36,10 @@ Required GitHub Actions secrets:
 - `S3_BUCKET`
 - `CLOUDFRONT_DISTRIBUTION_ID`
 
+Optional GitHub Actions variable or secret:
+
+- `GA_MEASUREMENT_ID`
+
 The deployment IAM user needs permission to list, write, and delete objects in the target S3 bucket, plus `cloudfront:CreateInvalidation` for the CloudFront distribution.
 
 ## Notes
