@@ -25,12 +25,15 @@
 }
 
 html {
-  min-height: 100%;
+  height: 100%;
   background: var(--bg);
 }
 
 body {
-  min-height: 100vh;
+  display: flex;
+  height: 100vh;
+  flex-direction: column;
+  overflow: hidden;
   margin: 0;
   color: var(--text);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -48,8 +51,8 @@ input {
 }
 
 .app-header {
-  position: sticky;
-  top: 0;
+  flex: 0 0 auto;
+  position: relative;
   z-index: 20;
   display: flex;
   align-items: center;
@@ -237,9 +240,12 @@ input:focus-visible,
 
 .app-shell {
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: minmax(280px, 330px) minmax(480px, 1fr) minmax(280px, 340px);
   gap: 14px;
-  align-items: start;
+  min-height: 0;
+  align-items: stretch;
+  overflow: hidden;
   padding: 14px;
 }
 
@@ -251,9 +257,8 @@ input:focus-visible,
 
 .pool-panel,
 .details-panel {
-  position: sticky;
-  top: 91px;
-  max-height: calc(100vh - 106px);
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -314,8 +319,10 @@ input:focus-visible,
 
 .pool-grid {
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: 1fr;
   gap: 8px;
+  min-height: 0;
   align-content: start;
   overflow: auto;
   padding: 12px;
@@ -325,6 +332,8 @@ input:focus-visible,
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  overflow: auto;
 }
 
 .share-notice {
@@ -371,6 +380,7 @@ input:focus-visible,
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 0;
 }
 
 .tier-row {
@@ -514,14 +524,19 @@ body.is-pointer-dragging {
 
 .details-content {
   display: flex;
-  min-height: 260px;
+  height: 100%;
+  min-height: 0;
   flex-direction: column;
+  overflow: auto;
 }
 
 .details-image {
+  display: block;
+  flex: 0 0 auto;
   width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
+  height: clamp(140px, 28vh, 260px);
+  object-fit: contain;
+  object-position: center;
   border-bottom: 1px solid var(--line);
   background: #11100e;
 }
@@ -584,41 +599,59 @@ body.is-pointer-dragging {
 
 .site-footer {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 18px 14px 24px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 16px 14px 22px;
   border-top: 1px solid var(--line);
   color: var(--muted);
   background: rgba(23, 22, 20, 0.92);
-  font-size: 13px;
+  font-size: 12px;
 }
 
-.footer-mail-button {
-  min-height: 34px;
-  padding: 6px 10px;
+.footer-mail-link {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 10px;
+  border: 1px solid rgba(215, 173, 82, 0.45);
+  border-radius: 999px;
+  color: var(--text);
+  background: rgba(215, 173, 82, 0.08);
   text-decoration: none;
+}
+
+.footer-mail-link:hover {
+  border-color: rgba(215, 173, 82, 0.85);
+  background: rgba(215, 173, 82, 0.14);
 }
 
 @media (max-width: 1180px) {
   .app-shell {
     grid-template-columns: minmax(260px, 320px) minmax(430px, 1fr);
+    align-items: start;
+    overflow: auto;
   }
 
   .details-panel {
     position: static;
     grid-column: 1 / -1;
+    height: auto;
     max-height: none;
   }
 
   .details-content {
     display: grid;
     grid-template-columns: minmax(240px, 320px) 1fr;
+    height: auto;
     min-height: 0;
   }
 
   .details-image {
-    height: 100%;
+    height: clamp(160px, 24vh, 240px);
     border-right: 1px solid var(--line);
     border-bottom: 0;
   }
@@ -647,6 +680,7 @@ body.is-pointer-dragging {
   .pool-panel,
   .details-panel {
     position: static;
+    height: auto;
     max-height: none;
   }
 
@@ -664,6 +698,7 @@ body.is-pointer-dragging {
 
   .details-content {
     display: flex;
+    height: auto;
   }
 }
 
