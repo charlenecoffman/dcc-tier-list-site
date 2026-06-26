@@ -86,6 +86,12 @@ input {
   letter-spacing: 0;
 }
 
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 h1,
 h2,
 h3,
@@ -874,29 +880,43 @@ body.is-pointer-dragging {
   height: clamp(180px, 34dvh, 300px);
 }
 
-@media (max-width: 1180px) {
+@media (min-width: 821px) and (max-width: 1180px) {
   .app-shell {
     grid-template-columns: minmax(260px, 320px) minmax(430px, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     align-items: start;
     overflow: auto;
   }
 
+  .pool-panel {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .board-panel {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
   .details-panel {
     position: static;
-    grid-column: 1 / -1;
-    height: auto;
-    max-height: none;
+    grid-column: 2;
+    grid-row: 1;
+    height: clamp(176px, 24vh, 240px);
+    max-height: clamp(176px, 24vh, 240px);
   }
 
   .details-content {
     display: grid;
     grid-template-columns: minmax(240px, 320px) 1fr;
-    height: auto;
+    height: 100%;
     min-height: 0;
+    overflow: auto;
   }
 
   .details-image {
-    height: clamp(160px, 24vh, 240px);
+    height: 100%;
+    min-height: 0;
     border-right: 1px solid var(--line);
     border-bottom: 0;
   }

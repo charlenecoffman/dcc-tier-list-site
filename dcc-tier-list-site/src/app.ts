@@ -8,6 +8,7 @@ const MOBILE_LONG_PRESS_MOVE_TOLERANCE = 10;
 const MOBILE_AUTO_SCROLL_EDGE = 76;
 const MOBILE_AUTO_SCROLL_MIN_SPEED = 4;
 const MOBILE_AUTO_SCROLL_MAX_SPEED = 18;
+const DETAILS_PREVIEW_CLEAR_DELAY = 1200;
 
 const ignoredTitlePrefixes = ["Category:", "Template:", "File:", "Help:"];
 const ignoredFilterCategories = new Set(["Characters", "Needs photo", "Stubs"]);
@@ -182,6 +183,8 @@ let characters: Character[] = [];
 let categoryFilters: CategoryFilter[] = [];
 let state: TierState = createEmptyState();
 let selectedId: CharacterId | null = null;
+let previewedId: CharacterId | null = null;
+let detailsPreviewClearTimer: number | null = null;
 let activeCategoryFilters: string[] = [];
 let draggedId: CharacterId | null = null;
 let pointerDrag: PointerDrag | null = null;
@@ -230,7 +233,8 @@ async function initialize(): Promise<void> {
       setStatus(`Loaded ${characters.length} live characters from the wiki.`);
     }
 
-    selectedId = firstAvailableCharacterId();
+    selectedId = null;
+    previewedId = null;
     render();
   } catch (error) {
     console.error(error);
@@ -371,7 +375,8 @@ function bindEvents(): void {
     state = reconcileState(hasLocalTier && localStateBeforeSharedTier
       ? localStateBeforeSharedTier
       : createEmptyState());
-    selectedId = firstAvailableCharacterId();
+    selectedId = null;
+    previewedId = null;
     pendingPlacementId = null;
     render();
     setStatus(hasLocalTier ? "Local tier restored." : "Ready to make your own tier.");
@@ -379,6 +384,26 @@ function bindEvents(): void {
 
   copyShareLinkButton.addEventListener("click", () => {
     void copyShareLinkFromInput();
+  });
+
+  detailsContent.addEventListener("mouseenter", () => {
+    cancelDetailsPreviewClear();
+  });
+
+  detailsContent.addEventListener("mouseleave", () => {
+    scheduleCharacterDetailsPreviewClear(previewedId);
+  });
+
+  detailsContent.addEventListener("focusin", () => {
+    cancelDetailsPreviewClear();
+  });
+
+  detailsContent.addEventListener("focusout", (event) => {
+    if (detailsContent.contains(event.relatedTarget as Node | null)) {
+      return;
+    }
+
+    scheduleCharacterDetailsPreviewClear(previewedId);
   });
 
   syncMobileExperience();
@@ -422,7 +447,7 @@ function closeResetDialog(): void {
 
 function openMobileDetailsDialog(id: CharacterId, returnFocus: HTMLElement): void {
   if (!isMobileExperience()) {
-    selectCharacter(id);
+    previewCharacterDetails(id);
     return;
   }
 
@@ -432,9 +457,7 @@ function openMobileDetailsDialog(id: CharacterId, returnFocus: HTMLElement): voi
     return;
   }
 
-  selectedId = id;
-  renderDetails();
-  updateSelectedCharacterCards(id);
+  selectCharacter(id);
   mobileDetailsReturnFocus = returnFocus;
   mobileDetailsContent.replaceChildren(...createCharacterDetailsContent(character, "mobileDetailsTitle"));
 
@@ -455,7 +478,8 @@ function closeMobileDetailsDialog(): void {
 
 function resetTierList(): void {
   state = createEmptyState();
-  selectedId = firstAvailableCharacterId();
+  selectedId = null;
+  previewedId = null;
   pendingPlacementId = null;
   setCharacterPickerOpen(false);
   viewingSharedTier = false;
@@ -484,7 +508,11 @@ async function refreshCharacters(): Promise<void> {
     );
 
     if (!characterMap.has(selectedId ?? "")) {
-      selectedId = firstAvailableCharacterId();
+      selectedId = null;
+    }
+
+    if (!characterMap.has(previewedId ?? "")) {
+      previewedId = null;
     }
 
     if (!viewingSharedTier) {
@@ -657,6 +685,9 @@ async function fetchJson<T extends ApiResponseBase>(parameters: Record<string, s
 }
 
 function render(): void {
+  cancelDetailsPreviewClear();
+  previewedId = null;
+
   if (pendingPlacementId && !characterMap.has(pendingPlacementId)) {
     pendingPlacementId = null;
   }
@@ -837,10 +868,11 @@ function renderCounts(): void {
 }
 
 function renderDetails(): void {
-  const character = selectedId ? characterMap.get(selectedId) : undefined;
+  const detailId = isMobileExperience() ? selectedId : previewedId ?? selectedId;
+  const character = detailId ? characterMap.get(detailId) : undefined;
 
   if (!character) {
-    detailsContent.replaceChildren(createEmptyDetails("Select a character"));
+    detailsContent.replaceChildren(createEmptyDetails("Character details"));
     return;
   }
 
@@ -972,12 +1004,30 @@ function createCharacterCard(character: Character): HTMLElement {
   });
 
   card.addEventListener("mouseenter", () => {
-    selectCharacter(character.id, false);
+    previewCharacterDetails(character.id);
+  });
+
+  card.addEventListener("mouseleave", () => {
+    scheduleCharacterDetailsPreviewClear(character.id);
+  });
+
+  card.addEventListener("focus", () => {
+    previewCharacterDetails(character.id);
+  });
+
+  card.addEventListener("blur", () => {
+    scheduleCharacterDetailsPreviewClear(character.id);
   });
 
   card.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
+
+      if (isMobileExperience()) {
+        openMobileDetailsDialog(character.id, card);
+        return;
+      }
+
       selectCharacter(character.id);
     }
   });
@@ -1393,6 +1443,7 @@ function moveCharacter(
   next.updatedAt = new Date().toISOString();
   state = next;
   selectedId = id;
+  previewedId = null;
   pendingPlacementId = pendingPlacementId === id ? null : pendingPlacementId;
 
   if (viewingSharedTier) {
@@ -1407,7 +1458,9 @@ function moveCharacter(
 }
 
 function selectCharacter(id: CharacterId, updateCards = true): void {
+  cancelDetailsPreviewClear();
   selectedId = id;
+  previewedId = null;
   renderDetails();
 
   if (!updateCards) {
@@ -1415,6 +1468,47 @@ function selectCharacter(id: CharacterId, updateCards = true): void {
   }
 
   updateSelectedCharacterCards(id);
+}
+
+function previewCharacterDetails(id: CharacterId): void {
+  if (isMobileExperience() || !characterMap.has(id)) {
+    return;
+  }
+
+  cancelDetailsPreviewClear();
+  previewedId = id;
+  renderDetails();
+}
+
+function scheduleCharacterDetailsPreviewClear(id: CharacterId | null): void {
+  cancelDetailsPreviewClear();
+
+  if (!id) {
+    return;
+  }
+
+  detailsPreviewClearTimer = window.setTimeout(() => {
+    detailsPreviewClearTimer = null;
+    clearCharacterDetailsPreview(id);
+  }, DETAILS_PREVIEW_CLEAR_DELAY);
+}
+
+function cancelDetailsPreviewClear(): void {
+  if (detailsPreviewClearTimer === null) {
+    return;
+  }
+
+  window.clearTimeout(detailsPreviewClearTimer);
+  detailsPreviewClearTimer = null;
+}
+
+function clearCharacterDetailsPreview(id: CharacterId): void {
+  if (previewedId !== id) {
+    return;
+  }
+
+  previewedId = null;
+  renderDetails();
 }
 
 function updateSelectedCharacterCards(id: CharacterId): void {
@@ -1914,18 +2008,6 @@ function rankedCharacterCount(): number {
 
 function hasRankedCharacters(input: TierState | null): boolean {
   return input !== null && tierKeys.some((tier) => input.tiers[tier].length > 0);
-}
-
-function firstAvailableCharacterId(): CharacterId | null {
-  for (const tier of tierKeys) {
-    const id = state.tiers[tier][0];
-
-    if (id && characterMap.has(id)) {
-      return id;
-    }
-  }
-
-  return characters[0]?.id ?? null;
 }
 
 function shouldInsertAfterTarget(event: DragEvent, target: HTMLElement): boolean {
