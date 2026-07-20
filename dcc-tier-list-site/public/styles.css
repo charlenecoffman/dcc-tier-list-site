@@ -1023,6 +1023,7 @@ body.is-pointer-dragging {
   .pool-grid {
     max-height: none;
     overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   .tier-row {
@@ -1055,6 +1056,7 @@ body.is-pointer-dragging {
     min-height: 44px;
     padding: 11px 12px;
     cursor: pointer;
+    touch-action: pan-y pinch-zoom;
   }
 
   .portrait-wrap {
