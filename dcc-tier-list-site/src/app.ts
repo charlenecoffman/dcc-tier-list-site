@@ -1185,12 +1185,6 @@ function startPointerDrag(event: PointerEvent, id: CharacterId, card: HTMLElemen
       }
     }, MOBILE_LONG_PRESS_DELAY);
   }
-
-  try {
-    card.setPointerCapture(event.pointerId);
-  } catch {
-    // Some embedded browsers do not allow capture here; document-level listeners still handle the drag.
-  }
 }
 
 function handlePointerMove(event: PointerEvent): void {
@@ -1259,6 +1253,13 @@ function handlePointerCancel(event: PointerEvent): void {
 function activatePointerDrag(drag: PointerDrag): void {
   clearPointerLongPressTimer(drag);
   drag.active = true;
+
+  try {
+    drag.sourceCard.setPointerCapture(drag.pointerId);
+  } catch {
+    // Document-level listeners still handle the drag when pointer capture is unavailable.
+  }
+
   drag.ghost = createDragGhost(drag.sourceCard);
   drag.sourceCard.classList.add("pointer-drag-source");
   document.body.classList.add("is-pointer-dragging");
@@ -1411,6 +1412,11 @@ function cleanupPointerDrag(): void {
 
   clearPointerLongPressTimer(pointerDrag);
   stopMobileAutoScroll();
+
+  if (pointerDrag.sourceCard.hasPointerCapture(pointerDrag.pointerId)) {
+    pointerDrag.sourceCard.releasePointerCapture(pointerDrag.pointerId);
+  }
+
   pointerDrag.sourceCard.classList.remove("pointer-drag-source");
   pointerDrag.ghost?.remove();
   pointerDrag = null;
